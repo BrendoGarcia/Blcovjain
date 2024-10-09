@@ -27,7 +27,7 @@
             margin-top: 10px;
             cursor: pointer;
         }
-        input, textarea, select {
+        input, textarea {
             width: 100%;
             padding: 8px;
             margin-top: 5px;
@@ -49,7 +49,7 @@
             border-bottom: 1px solid #ccc;
             padding: 5px 0;
         }
-        .transaction-item:last-child, .block:last-child {
+        .block:last-child, .transaction-item:last-child {
             border-bottom: none;
         }
         .flex-container {
@@ -190,12 +190,9 @@
 
             // Calcula a taxa de mineração baseada no total de moedas
             const feePercentage = this.calculateFeePercentage();
-            const minerFeeTransactions = this.pendingTransactions.map(tx => {
-                const feeAmount = (tx.amount * feePercentage / 100).toFixed(4);
-                return new Transaction(null, miningRewardAddress, feeAmount, feePercentage);
-            });
+            const totalFees = this.pendingTransactions.reduce((acc, tx) => acc + (tx.amount * feePercentage / 100), 0).toFixed(4);
 
-            // Recalcula as transações sem as taxas
+            // Cria o bloco com as transações sem as taxas
             const transactionsWithoutFees = this.pendingTransactions.map(tx => {
                 return new Transaction(tx.fromAddress, tx.toAddress, (tx.amount - (tx.amount * feePercentage / 100)).toFixed(4), tx.fee);
             });
@@ -211,9 +208,9 @@
             ];
 
             // Adiciona as taxas para o minerador
-            minerFeeTransactions.forEach(tx => {
-                this.pendingTransactions.push(tx);
-            });
+            if (totalFees > 0) {
+                this.pendingTransactions.push(new Transaction(null, miningRewardAddress, totalFees, 0));
+            }
 
             this.saveChain();
             this.savePendingTransactions();
@@ -228,7 +225,7 @@
             if (transaction.amount <= 0) {
                 throw new Error('A quantidade deve ser maior que zero.');
             }
-            if (this.getBalanceOfAddress(transaction.fromAddress) < transaction.amount) {
+            if (this.getBalanceOfAddress(transaction.fromAddress) < (parseFloat(transaction.amount) + parseFloat(transaction.fee))) {
                 throw new Error('Saldo insuficiente para a transação.');
             }
 
@@ -237,7 +234,7 @@
             const feeAmount = (transaction.amount * feePercentage / 100).toFixed(4);
 
             // Atualiza a quantidade da transação para subtrair a taxa
-            transaction.amount = (transaction.amount - feeAmount).toFixed(4);
+            transaction.amount = (parseFloat(transaction.amount) - parseFloat(feeAmount)).toFixed(4);
             transaction.fee = feeAmount;
 
             this.pendingTransactions.push(transaction);
@@ -336,28 +333,19 @@
                 return 1;
             }
 
-            // Linearmente diminui de 10 para 1
+            // Calcula a porcentagem linearmente
             const percentage = 10 - ((9 * current) / maxCoins);
-            return percentage < 1 ? 1 : percentage.toFixed(2);
+            return percentage < 1 ? 1 : parseFloat(percentage.toFixed(2));
         }
     }
 
-    // Função simples de hash SHA256 usando CryptoJS
-    // Incluindo a biblioteca via CDN
-    // É recomendado utilizar uma biblioteca confiável para hashing real
-    // Aqui usamos CryptoJS para fins de simulação
-    // Adicione esta linha no head se ainda não estiver presente:
-    // <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
-    // Porém, como não usamos bibliotecas externas no código, vamos simular uma função hash
-
+    // Função simples de hash SHA256 (simulação)
     function SHA256(s) {
-        // Simulação simplificada de hash usando uma função básica
-        // NÃO é seguro para uso real
         let hash = 0;
         for (let i = 0; i < s.length; i++) {
             const char = s.charCodeAt(i);
             hash = ((hash << 5) - hash) + char;
-            hash |= 0; // Convert to 32bit integer
+            hash |= 0; // Converte para inteiro de 32 bits
         }
         return {
             toString: () => hash.toString()
@@ -463,7 +451,6 @@
                     <p><strong>Quantidade:</strong> ${trans.amount} BTC</p>
                     <p><strong>Taxa:</strong> ${trans.fee} BTC</p>
                     <p><strong>Timestamp:</strong> ${new Date(trans.timestamp).toLocaleString()}</p>
-                    <hr>
                 `;
                 transactionsDiv.appendChild(transDiv);
             });
@@ -485,7 +472,6 @@
                 <p><strong>Quantidade:</strong> ${trans.amount} BTC</p>
                 <p><strong>Taxa:</strong> ${trans.fee} BTC</p>
                 <p><strong>Timestamp:</strong> ${new Date(trans.timestamp).toLocaleString()}</p>
-                <hr>
             `;
             transactionsDiv.appendChild(transDiv);
         });
@@ -516,7 +502,6 @@
                         </li>
                     `).join('')}
                 </ul>
-                <hr>
             `;
             chainDiv.appendChild(blockDiv);
         });
@@ -529,4 +514,4 @@
 </script>
 
 </body>
-        </html>
+</html>

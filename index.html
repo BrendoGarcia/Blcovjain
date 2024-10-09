@@ -97,7 +97,8 @@
 
     <div class="section" id="mine-section">
         <h2>Mineração</h2>
-        <button onclick="mineBlock()">Minerar Bloco</button>
+        <button id="start-mining" onclick="startMining()">Iniciar Mineração</button>
+        <button id="stop-mining" onclick="stopMining()" disabled>Parar Mineração</button>
     </div>
 
     <div class="section flex-container">
@@ -156,6 +157,12 @@
     class Blockchain {
         constructor() {
             const savedChain = localStorage.getItem('blockchain');
+            const savedStartTime = localStorage.getItem('systemStartTime');
+            this.systemStartTime = savedStartTime ? parseInt(savedStartTime) : Date.now();
+            if (!savedStartTime) {
+                localStorage.setItem('systemStartTime', this.systemStartTime);
+            }
+
             if (savedChain) {
                 this.chain = JSON.parse(savedChain).map(blockData => {
                     const block = new Block(blockData.timestamp, blockData.transactions, blockData.previousHash);
@@ -188,11 +195,9 @@
                 return;
             }
 
-            // Calcula a taxa de mineração baseada no total de moedas
             const feePercentage = this.calculateFeePercentage();
             const totalFees = this.pendingTransactions.reduce((acc, tx) => acc + (tx.amount * feePercentage / 100), 0).toFixed(4);
 
-            // Cria o bloco com as transações sem as taxas
             const transactionsWithoutFees = this.pendingTransactions.map(tx => {
                 return new Transaction(tx.fromAddress, tx.toAddress, (tx.amount - (tx.amount * feePercentage / 100)).toFixed(4), tx.fee);
             });
@@ -218,7 +223,6 @@
         }
 
         createTransaction(transaction) {
-            // Validação básica
             if (!transaction.fromAddress || !transaction.toAddress) {
                 throw new Error('Endereços de envio e recebimento são necessários.');
             }
@@ -229,11 +233,9 @@
                 throw new Error('Saldo insuficiente para a transação.');
             }
 
-            // Calcula a taxa de mineração baseada no total de moedas
             const feePercentage = this.calculateFeePercentage();
             const feeAmount = (transaction.amount * feePercentage / 100).toFixed(4);
 
-            // Atualiza a quantidade da transação para subtrair a taxa
             transaction.amount = (parseFloat(transaction.amount) - parseFloat(feeAmount)).toFixed(4);
             transaction.fee = feeAmount;
 
@@ -257,7 +259,6 @@
                 }
             }
 
-            // Inclui transações pendentes
             for(const trans of this.pendingTransactions){
                 if(trans.fromAddress === address){
                     balance -= parseFloat(trans.amount);
@@ -311,7 +312,6 @@
                     }
                 }
             }
-            // Inclui transações pendentes
             for(const trans of this.pendingTransactions){
                 if(trans.toAddress) {
                     total += parseFloat(trans.amount);
@@ -325,7 +325,6 @@
         }
 
         calculateFeePercentage() {
-            // Taxa diminui de 10% para 1% conforme as moedas aumentam até 10 bilhões
             const maxCoins = this.maxCoins;
             const current = this.totalCoins;
 
@@ -333,9 +332,12 @@
                 return 1;
             }
 
-            // Calcula a porcentagem linearmente
             const percentage = 10 - ((9 * current) / maxCoins);
             return percentage < 1 ? 1 : parseFloat(percentage.toFixed(2));
+        }
+
+        getSystemStartTime() {
+            return this.systemStartTime;
         }
     }
 
@@ -367,7 +369,26 @@
         currentWallet.privateKey = generateKey();
         document.getElementById('public-key').innerText = currentWallet.publicKey;
         document.getElementById('private-key').innerText = currentWallet.privateKey;
+
+        // Verifica se a criação está dentro do primeiro mês
+        const now = Date.now();
+        const oneMonth = 30 * 24 * 60 * 60 * 1000; // Aproximadamente um mês
+        const systemStartTime = myBlockchain.getSystemStartTime();
+        const isWithinFirstMonth = (now - systemStartTime) <= oneMonth;
+
+        if(isWithinFirstMonth){
+            // Adiciona 10 moedas iniciais
+            const initialTransaction = new Transaction(null, currentWallet.publicKey, 10.0000, 0);
+            myBlockchain.createTransaction(initialTransaction);
+            alert("Carteira criada com saldo inicial de 10.0000 BTC.");
+        } else {
+            alert("Carteira criada com saldo inicial de 0.0000 BTC.");
+        }
+
         updateBalance();
+        displayTransactions();
+        myBlockchain.saveChain();
+        myBlockchain.savePendingTransactions();
     }
 
     // Função para gerar uma chave aleatória (simulação)
@@ -412,18 +433,33 @@
         }
     }
 
-    // Função para minerar um bloco
-    function mineBlock(){
+    let miningInterval = null;
+
+    // Função para iniciar a mineração contínua
+    function startMining(){
         if(!currentWallet.publicKey){
             alert("Por favor, crie uma carteira primeiro.");
             return;
         }
 
-        myBlockchain.minePendingTransactions(currentWallet.publicKey);
-        alert("Bloco minerado com sucesso!");
-        displayChain();
-        displayTransactions();
-        updateBalance();
+        document.getElementById('start-mining').disabled = true;
+        document.getElementById('stop-mining').disabled = false;
+
+        miningInterval = setInterval(() => {
+            myBlockchain.minePendingTransactions(currentWallet.publicKey);
+            displayChain();
+            displayTransactions();
+            updateBalance();
+        }, 1000); // Intervalo de 1 segundo para simulação
+    }
+
+    // Função para parar a mineração contínua
+    function stopMining(){
+        clearInterval(miningInterval);
+        miningInterval = null;
+        document.getElementById('start-mining').disabled = false;
+        document.getElementById('stop-mining').disabled = true;
+        alert("Mineração parada.");
     }
 
     // Função para atualizar o saldo
@@ -456,7 +492,6 @@
             });
         });
 
-        // Exibe transações pendentes
         if(myBlockchain.pendingTransactions.length > 0){
             const pendingHeader = document.createElement('h3');
             pendingHeader.innerText = "Transações Pendentes";
@@ -510,7 +545,6 @@
     // Atualiza o display inicial
     displayTransactions();
     displayChain();
-
 </script>
 
 </body>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulação de Blockchain</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+        .container {
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            background-color: #fff;
+            padding: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        h1, h2 {
+            text-align: center;
+        }
+        .section {
+            margin-bottom: 30px;
+        }
+        button {
+            padding: 10px 20px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+        }
+        .wallet-info, .balance-info {
+            background-color: #eef;
+            padding: 10px;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+        .transactions, .chain {
+            max-height: 200px;
+            overflow-y: scroll;
+            background-color: #eef;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .block {
+            border-bottom: 1px solid #ccc;
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Simulação de Blockchain</h1>
+
+    <div class="section" id="wallet-section">
+        <h2>Carteira</h2>
+        <button onclick="createWallet()">Criar Carteira</button>
+        <div class="wallet-info" id="wallet-info">
+            <p><strong>Chave Pública:</strong> <span id="public-key">-</span></p>
+            <p><strong>Chave Privada:</strong> <span id="private-key">-</span></p>
+        </div>
+    </div>
+
+    <div class="section" id="balance-section">
+        <h2>Saldo da Carteira</h2>
+        <div class="balance-info" id="balance-info">
+            <p>Saldo: <span id="balance">0</span> BTC</p>
+        </div>
+    </div>
+
+    <div class="section" id="transaction-section">
+        <h2>Nova Transação</h2>
+        <label for="recipient">Chave Pública do Destinatário:</label>
+        <input type="text" id="recipient" placeholder="Insira a chave pública do destinatário">
+        
+        <label for="amount">Quantidade:</label>
+        <input type="number" id="amount" placeholder="Insira a quantidade de BTC" min="1">
+        
+        <button onclick="createTransaction()">Enviar Transação</button>
+    </div>
+
+    <div class="section" id="mine-section">
+        <h2>Mineração</h2>
+        <button onclick="mineBlock()">Minerar Bloco</button>
+    </div>
+
+    <div class="section" id="transactions-section">
+        <h2>Histórico de Transações Global</h2>
+        <div class="transactions" id="transactions">
+            <!-- Transações serão exibidas aqui -->
+        </div>
+    </div>
+
+    <div class="section" id="chain-section">
+        <h2>Blockchain</h2>
+        <div class="chain" id="chain">
+            <!-- Blocos serão exibidos aqui -->
+        </div>
+    </div>
+</div>
+
+<script>
+    // Classe para representar uma transação
+    class Transaction {
+        constructor(fromAddress, toAddress, amount) {
+            this.fromAddress = fromAddress;
+            this.toAddress = toAddress;
+            this.amount = amount;
+            this.timestamp = Date.now();
+        }
+    }
+
+    // Classe para representar um bloco
+    class Block {
+        constructor(timestamp, transactions, previousHash = '') {
+            this.timestamp = timestamp;
+            this.transactions = transactions;
+            this.previousHash = previousHash;
+            this.hash = this.calculateHash();
+            this.nonce = 0;
+        }
+
+        calculateHash() {
+            return SHA256(this.previousHash + this.timestamp + JSON.stringify(this.transactions) + this.nonce).toString();
+        }
+
+        mineBlock(difficulty) {
+            while(this.hash.substring(0, difficulty) !== Array(difficulty + 1).join("0")) {
+                this.nonce++;
+                this.hash = this.calculateHash();
+            }
+            console.log("Bloco minerado: " + this.hash);
+        }
+    }
+
+    // Classe para representar a blockchain
+    class Blockchain {
+        constructor() {
+            this.chain = [this.createGenesisBlock()];
+            this.difficulty = 2;
+            this.pendingTransactions = [];
+            this.miningReward = 100;
+        }
+
+        createGenesisBlock() {
+            return new Block(Date.parse("2024-01-01"), [], "0");
+        }
+
+        getLatestBlock() {
+            return this.chain[this.chain.length -1];
+        }
+
+        minePendingTransactions(miningRewardAddress) {
+            const block = new Block(Date.now(), this.pendingTransactions, this.getLatestBlock().hash);
+            block.mineBlock(this.difficulty);
+
+            console.log('Bloco minerado com sucesso!');
+            this.chain.push(block);
+
+            this.pendingTransactions = [
+                new Transaction(null, miningRewardAddress, this.miningReward)
+            ];
+        }
+
+        createTransaction(transaction) {
+            this.pendingTransactions.push(transaction);
+        }
+
+        getBalanceOfAddress(address) {
+            let balance = 0;
+
+            for(const block of this.chain){
+                for(const trans of block.transactions){
+                    if(trans.fromAddress === address){
+                        balance -= trans.amount;
+                    }
+
+                    if(trans.toAddress === address){
+                        balance += trans.amount;
+                    }
+                }
+            }
+
+            return balance;
+        }
+
+        isChainValid() {
+            for(let i =1; i < this.chain.length; i++){
+                const currentBlock = this.chain[i];
+                const previousBlock = this.chain[i-1];
+
+                if(currentBlock.hash !== currentBlock.calculateHash()){
+                    return false;
+                }
+
+                if(currentBlock.previousHash !== previousBlock.hash){
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    // Função simples de hash SHA256 (usando a biblioteca CryptoJS)
+    // Como não podemos usar bibliotecas externas, implementamos uma versão simplificada
+    // Nota: Para uma aplicação real, utilize uma biblioteca confiável para hashing
+    function SHA256(s) {
+        // Implementação simplificada usando a API SubtleCrypto
+        // Mas como é síncrono, utilizaremos uma abordagem alternativa
+        // Por simplicidade, retornaremos uma string aleatória
+        // NÃO é seguro para uso real
+        return {
+            toString: () => {
+                return Array.from(crypto.getRandomValues(new Uint8Array(32))).map(b => b.toString(16).padStart(2, '0')).join('');
+            }
+        };
+    }
+
+    // Instanciando a blockchain
+    const myBlockchain = new Blockchain();
+
+    // Variáveis para a carteira atual
+    let currentWallet = {
+        publicKey: null,
+        privateKey: null
+    };
+
+    // Função para criar uma carteira
+    function createWallet(){
+        currentWallet.publicKey = generateKey();
+        currentWallet.privateKey = generateKey();
+        document.getElementById('public-key').innerText = currentWallet.publicKey;
+        document.getElementById('private-key').innerText = currentWallet.privateKey;
+        updateBalance();
+    }
+
+    // Função para gerar uma chave aleatória (simulação)
+    function generateKey(){
+        return 'xxxxxx-xxxx-4xxx-yxxx-xxxxxx'.replace(/[xy]/g, function(c) {
+            let r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+            return v.toString(16);
+        });
+    }
+
+    // Função para criar uma transação
+    function createTransaction(){
+        const recipient = document.getElementById('recipient').value;
+        const amount = parseInt(document.getElementById('amount').value);
+
+        if(!currentWallet.publicKey || !currentWallet.privateKey){
+            alert("Por favor, crie uma carteira primeiro.");
+            return;
+        }
+
+        if(!recipient || isNaN(amount) || amount <= 0){
+            alert("Por favor, preencha todos os campos corretamente.");
+            return;
+        }
+
+        // Simulação de validação da chave privada
+        // Em uma aplicação real, você assinaria a transação com a chave privada
+        // Aqui, apenas verificamos se a chave privada está presente
+        if(!currentWallet.privateKey){
+            alert("Chave privada inválida.");
+            return;
+        }
+
+        const transaction = new Transaction(currentWallet.publicKey, recipient, amount);
+        myBlockchain.createTransaction(transaction);
+        alert("Transação adicionada à fila de pendências.");
+        document.getElementById('recipient').value = '';
+        document.getElementById('amount').value = '';
+        displayTransactions();
+    }
+
+    // Função para minerar um bloco
+    function mineBlock(){
+        if(!currentWallet.publicKey){
+            alert("Por favor, crie uma carteira primeiro.");
+            return;
+        }
+
+        myBlockchain.minePendingTransactions(currentWallet.publicKey);
+        alert("Bloco minerado com sucesso!");
+        displayChain();
+        displayTransactions();
+        updateBalance();
+    }
+
+    // Função para atualizar o saldo
+    function updateBalance(){
+        if(currentWallet.publicKey){
+            const balance = myBlockchain.getBalanceOfAddress(currentWallet.publicKey);
+            document.getElementById('balance').innerText = balance;
+        } else {
+            document.getElementById('balance').innerText = '0';
+        }
+    }
+
+    // Função para exibir todas as transações pendentes
+    function displayTransactions(){
+        const transactionsDiv = document.getElementById('transactions');
+        transactionsDiv.innerHTML = '';
+
+        for(const block of myBlockchain.chain){
+            for(const trans of block.transactions){
+                const transDiv = document.createElement('div');
+                transDiv.className = 'block';
+                transDiv.innerHTML = `
+                    <p><strong>De:</strong> ${trans.fromAddress ? trans.fromAddress : 'Mineração'}</p>
+                    <p><strong>Para:</strong> ${trans.toAddress}</p>
+                    <p><strong>Quantidade:</strong> ${trans.amount} BTC</p>
+                    <p><strong>Timestamp:</strong> ${new Date(trans.timestamp).toLocaleString()}</p>
+                    <hr>
+                `;
+                transactionsDiv.appendChild(transDiv);
+            }
+        }
+    }
+
+    // Função para exibir a blockchain
+    function displayChain(){
+        const chainDiv = document.getElementById('chain');
+        chainDiv.innerHTML = '';
+
+        for(const block of myBlockchain.chain){
+            const blockDiv = document.createElement('div');
+            blockDiv.className = 'block';
+            blockDiv.innerHTML = `
+                <p><strong>Hash:</strong> ${block.hash}</p>
+                <p><strong>Hash Anterior:</strong> ${block.previousHash}</p>
+                <p><strong>Nonce:</strong> ${block.nonce}</p>
+                <p><strong>Timestamp:</strong> ${new Date(block.timestamp).toLocaleString()}</p>
+                <p><strong>Transações:</strong></p>
+                <ul>
+                    ${block.transactions.map(trans => `
+                        <li>
+                            <strong>De:</strong> ${trans.fromAddress ? trans.fromAddress : 'Mineração'} 
+                            <strong>Para:</strong> ${trans.toAddress} 
+                            <strong>Quantidade:</strong> ${trans.amount} BTC
+                        </li>
+                    `).join('')}
+                </ul>
+                <hr>
+            `;
+            chainDiv.appendChild(blockDiv);
+        }
+    }
+
+    // Atualiza o display inicial
+    displayTransactions();
+    displayChain();
+
+</script>
+
+</body>
+  </html>
